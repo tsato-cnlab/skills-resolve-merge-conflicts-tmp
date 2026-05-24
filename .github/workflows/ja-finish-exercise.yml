@@ -1,0 +1,86 @@
+name: 演習完了 日本語版
+
+on:
+  workflow_call:
+    inputs:
+      issue-url:
+        description: "更新して閉じる Issue の URL"
+        required: true
+        type: string
+      exercise-title:
+        description: "演習タイトル"
+        required: false
+        type: string
+      update-readme-with-congratulations:
+        description: "README を完了メッセージで更新するかどうか"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  update_readme:
+    name: README を完了メッセージで更新
+    runs-on: ubuntu-latest
+    if: inputs.update-readme-with-congratulations
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: テンプレートから完了メッセージを作成
+        id: build-new-readme
+        uses: skills/action-text-variables@v3
+        with:
+          template-file: .github/ja-templates/readme/exercise-finished.md
+          template-vars: |
+            login: ${{ github.actor }}
+            issue_url: ${{ inputs.issue-url }}
+            exercise_title: ${{ inputs.exercise-title }}
+            repository_url: https://github.com/${{ github.repository }}
+
+      - name: README を上書き
+        env:
+          README_TEXT: ${{ steps.build-new-readme.outputs.updated-text }}
+        run: echo "$README_TEXT" > README.md
+
+      - name: README を更新 - 完了
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "README.md"
+          message: "演習を完了"
+          default_author: github_actions
+
+  finish_issue:
+    name: Issue にコメントして閉じる
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: メッセージを作成 - 演習完了
+        id: build-finish-message
+        uses: skills/action-text-variables@v3
+        with:
+          template-file: .github/ja-templates/step-feedback/exercise-finished.md
+          template-vars: |
+            login: ${{ github.actor }}
+            repo_full_name: ${{ github.repository }}
+
+      - name: コメントを作成 - 演習完了
+        run: |
+          gh issue comment "${{ inputs.issue-url }}" \
+            --body "${{ steps.build-finish-message.outputs.updated-text }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Issue を閉じる
+        run: gh issue close "${{ inputs.issue-url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

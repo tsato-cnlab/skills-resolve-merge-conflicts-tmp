@@ -1,0 +1,119 @@
+name: 演習開始 日本語版
+
+on:
+  workflow_call:
+    inputs:
+      exercise-title:
+        description: "演習タイトル"
+        required: true
+        type: string
+      issue-title-prefix:
+        description: "Issue タイトルの接頭辞"
+        required: false
+        type: string
+        default: "演習: "
+      intro-message:
+        description: "導入メッセージ"
+        required: true
+        type: string
+    outputs:
+      issue-url:
+        description: "作成した Issue の URL"
+        value: ${{ jobs.create_exercise.outputs.issue-url }}
+      issue-number:
+        description: "作成した Issue の番号"
+        value: ${{ jobs.create_exercise.outputs.issue-number }}
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+jobs:
+  disable_workflows:
+    name: 演習 workflow を無効化
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: すべての演習 workflow を無効化
+        run: |
+          workflows=$(git ls-files | grep -E '^\.github/workflows/[0-9].*\.(yml|yaml)$')
+          for workflow in $workflows; do
+            workflow_name="$(basename "$workflow")"
+            echo "Disabling workflow: $workflow_name"
+            gh workflow disable "$workflow_name" || true
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create_exercise:
+    name: 演習 Issue を作成
+    runs-on: ubuntu-latest
+
+    outputs:
+      issue-url: ${{ steps.create-issue.outputs.ISSUE_URL }}
+      issue-number: ${{ steps.create-issue.outputs.ISSUE_NUMBER }}
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: テンプレートから歓迎メッセージを作成
+        id: build-issue-description
+        uses: skills/action-text-variables@v3
+        with:
+          template-file: .github/ja-templates/step-feedback/welcome.md
+          template-vars: |
+            title: ${{ inputs.exercise-title }}
+            login: ${{ github.actor }}
+            intro_message: ${{ inputs.intro-message }}
+
+      - name: Issue を作成 - 歓迎メッセージ
+        id: create-issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${process.env.ISSUE_TITLE_PREFIX}${process.env.EXERCISE_TITLE}`,
+              body: process.env.ISSUE_BODY
+            });
+            core.setOutput('ISSUE_URL', issue.html_url);
+            core.setOutput('ISSUE_NUMBER', issue.number);
+        env:
+          ISSUE_BODY: ${{ steps.build-issue-description.outputs.updated-text }}
+          EXERCISE_TITLE: ${{ inputs.exercise-title }}
+          ISSUE_TITLE_PREFIX: ${{ inputs.issue-title-prefix }}
+
+  update_readme:
+    name: README を更新
+    runs-on: ubuntu-latest
+    needs: create_exercise
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: テンプレートから README メッセージを作成
+        id: build-new-readme
+        uses: skills/action-text-variables@v3
+        with:
+          template-file: .github/ja-templates/readme/exercise-started.md
+          template-vars: |
+            title: ${{ inputs.exercise-title }}
+            login: ${{ github.actor }}
+            issue_url: ${{ needs.create_exercise.outputs.issue-url }}
+
+      - name: README を上書き
+        env:
+          README_TEXT: ${{ steps.build-new-readme.outputs.updated-text }}
+        run: echo "$README_TEXT" > README.md
+
+      - name: 変更をコミット
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "README.md"
+          message: "演習を開始"
+          default_author: github_actions

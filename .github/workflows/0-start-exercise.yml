@@ -1,0 +1,86 @@
+name: ステップ 0
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+env:
+  STEP_1_FILE: ".github/steps/1-step.md"
+
+jobs:
+  start_exercise:
+    if: |
+      !github.event.repository.is_template
+    name: 演習 Issue を作成
+    uses: ./.github/workflows/ja-start-exercise.yml
+    with:
+      exercise-title: "マージコンフリクトを解決する"
+      intro-message: "GitHub で共同作業するときに発生するマージコンフリクトの解決方法を学びましょう。"
+
+  prepare_merge_conflict:
+    name: マージコンフリクトを準備
+    runs-on: ubuntu-latest
+    needs: [start_exercise]
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: resume.md にコンフリクトを作成
+        run: |
+          git checkout -b my-resume
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          echo "- オープンソースプロジェクトに貢献" >> resume.md
+          git add resume.md
+          git commit -m "Add open source experience"
+          git push origin my-resume
+
+          git checkout main
+          git pull --rebase origin main
+          echo "- 社内ツールを構築" >> resume.md
+          git add resume.md
+          git commit -m "Add internal experience"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  post_next_step_content:
+    name: 次のステップを投稿
+    runs-on: ubuntu-latest
+    needs: [start_exercise]
+    env:
+      ISSUE_NUMBER: ${{ needs.start_exercise.outputs.issue-number }}
+      ISSUE_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: コメントを作成 - ステップ本文
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          file: ${{ env.STEP_1_FILE }}
+
+      - name: コメントを作成 - 進捗待ち
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          file: .github/ja-templates/step-feedback/watching-for-progress.md
+
+      - name: 次のステップの workflow を有効化
+        run: |
+          gh workflow enable "1-step.yml"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
