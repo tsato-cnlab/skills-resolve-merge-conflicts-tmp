@@ -1,8 +1,7 @@
-# マージコンフリクトを解決する
+# マージコンフリクトを解決する を完了しました
 
-@tsato-cnlab さん、演習を開始しました。
+@tsato-cnlab さん、演習お疲れさまでした。
 
-手順は次の Issue に投稿されています。
-
-[演習 Issue を開く](https://github.com/tsato-cnlab/skills-resolve-merge-conflicts-tmp/issues/1)
+- 演習 Issue: https://github.com/tsato-cnlab/skills-resolve-merge-conflicts-tmp/issues/1
+- リポジトリ: https://github.com/tsato-cnlab/skills-resolve-merge-conflicts-tmp
 
